@@ -1,0 +1,11 @@
+server:
+  url: "http://127.0.0.1:4723"
+
+capabilities:
+  platformName: "Android"
+  automationName: "UiAutomator2"
+  deviceName: "a166ea3"
+  appPackage: "x.mitrade.dev"
+  appActivity: "com.mitrade.app.splash.view.SplashActivity"
+  noReset: true
+  newCommandTimeout: 120

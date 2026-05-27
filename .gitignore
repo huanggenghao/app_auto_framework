@@ -1,0 +1,41 @@
+cat > .gitignore <<'EOF'
+# Python 虚拟环境
+.venv/
+venv/
+env/
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# pytest / 缓存
+.pytest_cache/
+.cache/
+
+# 测试报告 / Allure
+allure-results/
+allure-report/
+Report/
+reports/
+htmlcov/
+
+# 日志
+logs/
+*.log
+
+# IDE 配置
+.idea/
+.vscode/
+
+# Mac 系统文件
+.DS_Store
+
+# 本地环境变量 / 敏感配置
+.env
+*.env
+config/local.yaml
+config/dev.yaml
+config/accounts.yaml
+data/accounts.yaml
+EOF

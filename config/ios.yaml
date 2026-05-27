@@ -1,0 +1,12 @@
+server:
+  url: "http://127.0.0.1:4723"
+
+capabilities:
+  platformName: "iOS"
+  automationName: "XCUITest"
+  deviceName: "iPhone Simulator"
+  platformVersion: "17.0"
+  bundleId: "com.example.ios"
+  noReset: true
+  newCommandTimeout: 120
+

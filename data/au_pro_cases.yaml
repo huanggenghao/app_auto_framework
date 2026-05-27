@@ -1,0 +1,17 @@
+cases:
+  - case_id: "au_pro_card_visible"
+    title: "AU PRO卡片在个人中心展示"
+    account_key: "au_pro_user"
+    auth_method: "password"
+    use_prefilled_password: false
+    verification_code: "123456"
+    post_login:
+      expected_landing: "home"
+      timeout: 15
+    expected:
+      au_pro_card_visible: true
+      texts:
+        - "Up to 200x leverage"
+        - "Unlock uncapped profit potential"
+        - "Margin from just 0.5%"
+        - "Plus exclusive PRO rewards"
