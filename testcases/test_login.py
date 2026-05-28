@@ -17,7 +17,7 @@ def load_login_cases():
 @severity(get_severity_level("critical"))
 @pytest.mark.login
 @pytest.mark.parametrize("case_data", load_login_cases(), ids=lambda case: case["case_id"])
-def test_login(driver, platform, case_data):
+def test_login(driver, platform, ensure_logged_out, case_data):
     login_flow = LoginFlow(driver, platform)
 
     dynamic_title(case_data["title"])
@@ -29,6 +29,8 @@ def test_login(driver, platform, case_data):
         verification_code=case_data.get("verification_code"),
         use_prefilled_password=case_data.get("use_prefilled_password", True),
         post_login=case_data.get("post_login"),
+        country_code=case_data.get("phone_country_code"),
+        country_name=case_data.get("phone_country_name"),
     )
 
     expected = case_data["expected"]

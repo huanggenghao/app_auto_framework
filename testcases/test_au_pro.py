@@ -1,7 +1,7 @@
 import pytest
 
 from business.au_pro_flow import AuProFlow
-from common.account_util import resolve_account
+from common.account_util import resolve_account_from_case
 from common.allure_util import dynamic_title, feature, get_severity_level, severity, story
 from common.path_util import PathUtil
 from common.yaml_util import load_yaml
@@ -13,7 +13,7 @@ def load_au_pro_cases():
 
     for case_data in data.get("cases", []):
         resolved_case = dict(case_data)
-        resolved_case["account"] = resolve_account(case_data["account_key"])
+        resolved_case["account"] = resolve_account_from_case(case_data)
         cases.append(resolved_case)
 
     return cases
@@ -31,4 +31,4 @@ def test_au_pro_card(driver, platform, case_data):
     au_pro_flow = AuProFlow(driver, platform)
 
     dynamic_title(case_data["title"])
-    au_pro_flow.assert_au_pro_card(case_data)
+    au_pro_flow.assert_au_pro_case(case_data)

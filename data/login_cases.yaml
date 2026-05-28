@@ -1,10 +1,8 @@
 cases:
   - case_id: "login_phone_success"
     title: "手机号密码登录成功并处理验证码和KYC"
-    login_type: "phone"
+    account_type: "au_normal_phone"
     auth_method: "password"
-    account: "412345677"
-    password: "1234567q"
     use_prefilled_password: true
     verification_code: "123456"
     post_login:
@@ -17,15 +15,12 @@ cases:
 
   - case_id: "login_email_password_success"
     title: "邮箱密码登录成功"
-    login_type: "email"
+    account_type: "au_normal"
     auth_method: "password"
-    account: "ben1@gmail.com"
-    password: "abcd1234"
     use_prefilled_password: false
     verification_code: "123456"
     post_login:
-      expected_landing: "kyc"
-      kyc_action: "leave"
+      expected_landing: "home"
       timeout: 15
     expected:
       success: true
@@ -33,13 +28,11 @@ cases:
 
   - case_id: "login_email_code_success"
     title: "邮箱验证码登录成功"
-    login_type: "email"
+    account_type: "au_normal"
     auth_method: "verification_code"
-    account: "ben1@gmail.com"
     verification_code: "123456"
     post_login:
-      expected_landing: "kyc"
-      kyc_action: "leave"
+      expected_landing: "home"
       timeout: 15
     expected:
       success: true

@@ -1,7 +1,14 @@
 cases:
   - case_id: "au_pro_card_visible"
     title: "AU PRO卡片在个人中心展示"
-    account_key: "au_pro_user"
+    account_type: "au_not_pro_not_assessed"
+    account_preconditions:
+      region: "AU"
+      kyc_status: "completed"
+      pro_status: "not_pro_or_eligible"
+      appropriateness_assessment_status: "not_required_for_card_check"
+      employment_status: "not_required_for_card_check"
+      note: "账号必须为AU区域，且后台AU PRO入口开关已打开。"
     auth_method: "password"
     use_prefilled_password: false
     verification_code: "123456"
@@ -15,3 +22,55 @@ cases:
         - "Unlock uncapped profit potential"
         - "Margin from just 0.5%"
         - "Plus exclusive PRO rewards"
+
+  - case_id: "au_pro_leverage_entry_visible"
+    title: "AU PRO杠杆选择弹层展示升级入口"
+    account_type: "au_not_pro_not_assessed"
+    account_preconditions:
+      region: "AU"
+      kyc_status: "completed"
+      pro_status: "not_pro"
+      appropriateness_assessment_status: "not_completed_or_entry_visible"
+      employment_status: "any"
+      note: "账号必须为AU区域，后台配置展示Unlock up to 200X leverage入口。"
+    auth_method: "password"
+    use_prefilled_password: false
+    verification_code: "123456"
+    post_login:
+      expected_landing: "home"
+      timeout: 15
+    trade:
+      instrument: "Gold"
+    expected:
+      leverage_pro_entry_visible: true
+      leverage_pro_text: "Unlock up to 200X leverage"
+
+  - case_id: "au_pro_leverage_entry_opens_assessment"
+    title: "点击AU PRO杠杆入口跳转适当性评估页"
+    account_type: "au_not_pro_not_assessed"
+    account_preconditions:
+      region: "AU"
+      kyc_status: "completed"
+      pro_status: "not_pro"
+      appropriateness_assessment_status: "not_completed"
+      employment_status: "not_submitted"
+      note: "账号必须为AU区域，未完成AU PRO适当性评估；如先出现Open Pro Account中间页，用例会继续点击进入评估页。"
+    auth_method: "password"
+    use_prefilled_password: false
+    verification_code: "123456"
+    post_login:
+      expected_landing: "home"
+      timeout: 15
+    trade:
+      instrument: "Gold"
+    expected:
+      appropriateness_assessment_visible: true
+      leverage_pro_text: "Unlock up to 200X leverage"
+      optional_pro_account_intro_texts:
+        - "Open Pro Account"
+        - "Leverage up to 200:1"
+        - "Unlock Mitrade Pro exclusive perks and benefits"
+      assessment_texts:
+        - "Appropriateness assessment"
+        - "Employment Status"
+        - "Section 1 out of 2"

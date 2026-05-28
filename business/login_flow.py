@@ -20,6 +20,8 @@ class LoginFlow:
         verification_code=None,
         use_prefilled_password=True,
         post_login=None,
+        country_code=None,
+        country_name=None,
     ):
         with step(f"Login with {login_type} and {auth_method}"):
             if self.platform == "android":
@@ -31,6 +33,8 @@ class LoginFlow:
                     verification_code,
                     use_prefilled_password,
                     post_login,
+                    country_code,
+                    country_name,
                 )
                 return
 
@@ -59,6 +63,8 @@ class LoginFlow:
         verification_code,
         use_prefilled_password,
         post_login,
+        country_code,
+        country_name,
     ):
         self.page.enter_login_page()
         self.page.select_login_type(login_type)
@@ -69,6 +75,8 @@ class LoginFlow:
             auth_method,
             verification_code,
             use_prefilled_password,
+            country_code,
+            country_name,
         )
         self.page.tap_login_button()
         self._handle_android_post_login(
@@ -85,6 +93,8 @@ class LoginFlow:
         auth_method,
         verification_code,
         use_prefilled_password,
+        country_code,
+        country_name,
     ):
         if auth_method == "password":
             self._input_android_password_login(
@@ -92,6 +102,8 @@ class LoginFlow:
                 account,
                 password,
                 use_prefilled_password,
+                country_code,
+                country_name,
             )
             return
         if auth_method == "verification_code":
@@ -109,8 +121,12 @@ class LoginFlow:
         account,
         password,
         use_prefilled_password,
+        country_code,
+        country_name,
     ):
         self.page.switch_auth_method_if_needed("password")
+        if login_type == "phone":
+            self.page.select_phone_country_if_needed(country_code, country_name)
         self.page.input_account(login_type, account)
         if login_type == "email" or not use_prefilled_password:
             self.page.input_password(password)
@@ -246,6 +262,7 @@ class LoginFlow:
     def _wait_for_android_home(self, timeout):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
+            self.page.close_bonus_popup_if_visible(timeout=3)
             if self.page.is_home_visible(timeout=1):
                 return
             time.sleep(0.5)

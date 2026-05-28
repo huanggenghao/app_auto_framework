@@ -1,3 +1,6 @@
+from contextlib import contextmanager
+import time
+
 from selenium.common.exceptions import TimeoutException, WebDriverException
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -42,6 +45,24 @@ class BasePage:
                 f"Element not clickable within {wait_time}s: {locator}. {diagnostics}"
             ) from exc
 
+    def wait_until(self, condition, timeout=None, interval=0.5, message="Condition was not met"):
+        wait_time = timeout or self.timeout
+        end_time = time.time() + wait_time
+        last_error = None
+
+        while time.time() < end_time:
+            try:
+                if condition():
+                    return True
+            except Exception as exc:
+                last_error = exc
+            time.sleep(interval)
+
+        diagnostics = self.capture_diagnostics("wait_condition_timeout")
+        raise ElementOperationError(
+            f"{message} within {wait_time}s. Last error={last_error}. {diagnostics}"
+        )
+
     def find(self, locator, timeout=None):
         return self.wait_for_visible(locator, timeout)
 
@@ -69,6 +90,14 @@ class BasePage:
         y = window_size["height"] * y_ratio
         self.tap_coordinates(x, y)
 
+    def press_back(self):
+        with step("Press back"):
+            try:
+                self.driver.back()
+            except WebDriverException as exc:
+                diagnostics = self.capture_diagnostics("press_back_failed")
+                raise ElementOperationError(f"Failed to press back. {diagnostics}") from exc
+
     def input_text(self, locator, text, clear_first=True, timeout=None):
         with step(f"Input text into element: {locator}"):
             element = self.wait_for_visible(locator, timeout)
@@ -92,6 +121,40 @@ class BasePage:
             return True
         except ElementOperationError:
             return False
+
+    @contextmanager
+    def preserved_context(self):
+        original_context = self.current_context()
+        try:
+            yield
+        finally:
+            if original_context and self.current_context() != original_context:
+                self.switch_to_context(original_context)
+
+    def current_context(self):
+        try:
+            return self.driver.current_context
+        except WebDriverException:
+            return None
+
+    def available_contexts(self):
+        try:
+            return self.driver.contexts
+        except WebDriverException:
+            return []
+
+    def switch_to_context(self, context_name):
+        with step(f"Switch context: {context_name}"):
+            try:
+                self.driver.switch_to.context(context_name)
+            except WebDriverException as exc:
+                diagnostics = self.capture_diagnostics("switch_context_failed")
+                raise ElementOperationError(
+                    f"Failed to switch context: {context_name}. {diagnostics}"
+                ) from exc
+
+    def switch_to_native_context(self):
+        self.switch_to_context("NATIVE_APP")
 
     def take_screenshot(self, name):
         screenshot_path = PathUtil.screenshot_path(name)

@@ -21,6 +21,10 @@ class AndroidLoginPage(BasePage):
     )
 
     PHONE_INPUT = ("id", "x.mitrade.dev:id/etPhone")
+    PHONE_COUNTRY_SELECTOR = ("id", "x.mitrade.dev:id/csSelectRegisterCountry")
+    PHONE_COUNTRY_TEXT = ("id", "x.mitrade.dev:id/tvCountryText")
+    COUNTRY_PICKER_SEARCH = ("id", "x.mitrade.dev:id/et_search")
+    COUNTRY_PICKER_CLOSE = ("id", "x.mitrade.dev:id/ivCloseDialog")
     EMAIL_INPUT_CANDIDATES = (
         ("id", "x.mitrade.dev:id/etCommonInput"),
         ("id", "x.mitrade.dev:id/etEmail"),
@@ -51,6 +55,8 @@ class AndroidLoginPage(BasePage):
         ("xpath", "//android.widget.Button[@text='离开']"),
         ("xpath", "//android.widget.TextView[@text='离开']"),
     )
+    BONUS_POPUP_TITLE = ("xpath", "//*[@text='恭喜您获得']")
+    BONUS_POPUP_CONFIRM = ("id", "x.mitrade.dev:id/btnNegative")
 
     HOME_LOGO = ("id", "x.mitrade.dev:id/ivHomeLogo")
     HOME_TAB = ("id", "x.mitrade.dev:id/rbTabHome")
@@ -65,6 +71,63 @@ class AndroidLoginPage(BasePage):
 
     def is_on_login_page(self, timeout=3):
         return self.is_element_visible(self.LOGIN_TITLE, timeout=timeout)
+
+    def is_on_onboarding_page(self, timeout=3):
+        return self.is_element_visible(self.ONBOARDING_LOGIN_TEXT, timeout=timeout)
+
+    def is_country_picker_visible(self, timeout=3):
+        return self.is_element_visible(
+            self.COUNTRY_PICKER_SEARCH,
+            timeout=timeout,
+        ) or self.is_element_visible(
+            (
+                "xpath",
+                "//*[@resource-id='x.mitrade.dev:id/tvTitle' and @text='选择国家/地区']",
+            ),
+            timeout=1,
+        )
+
+    def close_country_picker_if_visible(self, timeout=3):
+        if not self.is_country_picker_visible(timeout=1):
+            return False
+
+        with step("Close country picker"):
+            if self.is_element_visible(self.COUNTRY_PICKER_CLOSE, timeout=1):
+                self.click(self.COUNTRY_PICKER_CLOSE, timeout=timeout)
+            else:
+                self.press_back()
+            self.wait_until(
+                lambda: not self.is_country_picker_visible(timeout=1),
+                timeout=timeout,
+                message="Country picker should be closed",
+            )
+        return True
+
+    def select_phone_country_if_needed(self, country_code=None, country_name=None, timeout=5):
+        if not country_code:
+            return
+
+        expected_code = self._normalize_country_code(country_code)
+        if self.is_element_visible(self.PHONE_COUNTRY_TEXT, timeout=2):
+            current_code = self.get_text(self.PHONE_COUNTRY_TEXT, timeout=2)
+            if current_code == expected_code:
+                return
+
+        with step(f"Select phone country: {country_name or expected_code} {expected_code}"):
+            self.click(self.PHONE_COUNTRY_SELECTOR, timeout=timeout)
+            self.wait_for_visible(self.COUNTRY_PICKER_SEARCH, timeout=timeout)
+            self.input_text(
+                self.COUNTRY_PICKER_SEARCH,
+                country_name or expected_code,
+                timeout=timeout,
+            )
+            self.hide_keyboard_if_open()
+            self.click(self._country_code_option_locator(expected_code), timeout=timeout)
+            self.wait_until(
+                lambda: self.get_text(self.PHONE_COUNTRY_TEXT, timeout=2) == expected_code,
+                timeout=timeout,
+                message=f"Phone country should be selected: {expected_code}",
+            )
 
     def select_login_type(self, login_type, timeout=5):
         if login_type == "phone":
@@ -142,6 +205,24 @@ class AndroidLoginPage(BasePage):
             except ElementOperationError:
                 continue
         self.tap_relative(0.50, 0.95)
+
+    def is_bonus_popup_visible(self, timeout=3):
+        return self.is_element_visible(self.BONUS_POPUP_TITLE, timeout=timeout) or self.is_element_visible(
+            self.BONUS_POPUP_CONFIRM, timeout=1
+        )
+
+    def close_bonus_popup_if_visible(self, timeout=3):
+        if not self.is_bonus_popup_visible(timeout=1):
+            return False
+
+        with step("Close post-login bonus popup"):
+            self.click(self.BONUS_POPUP_CONFIRM, timeout=timeout)
+            self.wait_until(
+                lambda: not self.is_bonus_popup_visible(timeout=1),
+                timeout=timeout,
+                message="Post-login bonus popup should be closed",
+            )
+        return True
 
     def get_error_message(self):
         return self.get_text(self.ERROR_MESSAGE, timeout=5)
@@ -233,3 +314,18 @@ class AndroidLoginPage(BasePage):
 
         parts = value.split("'")
         return "concat(" + ', "\'", '.join(f"'{part}'" for part in parts) + ")"
+
+    @classmethod
+    def _country_code_option_locator(cls, country_code):
+        return (
+            "xpath",
+            "//*[@resource-id='x.mitrade.dev:id/tvNumber' "
+            f"and @text={cls._xpath_literal(country_code)}]/ancestor::android.widget.RelativeLayout[1]",
+        )
+
+    @staticmethod
+    def _normalize_country_code(country_code):
+        country_code = str(country_code).strip()
+        if country_code.startswith("+"):
+            return country_code
+        return f"+{country_code}"
