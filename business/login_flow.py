@@ -1,9 +1,13 @@
 import time
 
 from common.allure_util import step
+from common.logger import get_logger
 from core.exceptions import LoginStateError, UnsupportedPlatformError
 from pages.android.login_page import AndroidLoginPage
 from pages.ios.login_page import IOSLoginPage
+
+
+logger = get_logger(__name__)
 
 
 class LoginFlow:
@@ -22,6 +26,7 @@ class LoginFlow:
         post_login=None,
         country_code=None,
         country_name=None,
+        account_type=None,
     ):
         with step(f"Login with {login_type} and {auth_method}"):
             if self.platform == "android":
@@ -35,6 +40,7 @@ class LoginFlow:
                     post_login,
                     country_code,
                     country_name,
+                    account_type,
                 )
                 return
 
@@ -65,9 +71,13 @@ class LoginFlow:
         post_login,
         country_code,
         country_name,
+        account_type,
     ):
-        self.page.enter_login_page()
-        self.page.select_login_type(login_type)
+        logger.info("当前用例 account_type: %s", account_type)
+        logger.info("登录模式: %s", login_type)
+        logger.info("进入登录页")
+        self.page.prepare_for_login(login_type, account_type=account_type)
+        self.page.select_login_type(login_type, account_type=account_type)
         self._input_android_credentials(
             login_type,
             account,
@@ -78,12 +88,14 @@ class LoginFlow:
             country_code,
             country_name,
         )
+        logger.info("点击登录")
         self.page.tap_login_button()
-        self._handle_android_post_login(
+        landing_page = self._handle_android_post_login(
             auth_method,
             verification_code,
             post_login or {},
         )
+        logger.info("登录成功后进入的主页面: %s", landing_page)
 
     def _input_android_credentials(
         self,
@@ -126,12 +138,18 @@ class LoginFlow:
     ):
         self.page.switch_auth_method_if_needed("password")
         if login_type == "phone":
+            logger.info("输入手机号: %s, 国家区号: %s", account, country_code)
             self.page.select_phone_country_if_needed(country_code, country_name)
+        else:
+            logger.info("输入邮箱账号: %s", account)
+        logger.info("输入账号: %s", account)
         self.page.input_account(login_type, account)
         if login_type == "email" or not use_prefilled_password:
+            logger.info("输入密码")
             self.page.input_password(password)
             return
 
+        logger.info("使用预填密码")
         self.page.enable_prefilled_password()
 
     def _input_android_verification_code_login(
@@ -163,15 +181,15 @@ class LoginFlow:
         self._ensure_expected_landing(actual_landing, post_login)
 
         if actual_landing == "home":
-            return
+            return "home"
 
         if actual_landing == "restriction_popup":
             self._handle_android_restriction_popup(post_login)
-            return
+            return "restriction_popup"
 
         if actual_landing == "kyc":
             self._handle_android_kyc_landing(post_login)
-            return
+            return "home" if self.page.is_home_visible(timeout=3) else "kyc"
 
         self._raise_unexpected_login_state(
             f"Unsupported post-login landing state: {actual_landing}",

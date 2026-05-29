@@ -1,7 +1,8 @@
 cases:
   - case_id: "au_pro_card_visible"
+    scenario: "card_visible"
     title: "AU PRO卡片在个人中心展示"
-    account_type: "au_not_pro_not_assessed"
+    account_type: "au_kyc_completed"
     account_preconditions:
       region: "AU"
       kyc_status: "completed"
@@ -24,8 +25,9 @@ cases:
         - "Plus exclusive PRO rewards"
 
   - case_id: "au_pro_leverage_entry_visible"
+    scenario: "leverage_entry_visible"
     title: "AU PRO杠杆选择弹层展示升级入口"
-    account_type: "au_not_pro_not_assessed"
+    account_type: "au_kyc_completed"
     account_preconditions:
       region: "AU"
       kyc_status: "completed"
@@ -41,13 +43,15 @@ cases:
       timeout: 15
     trade:
       instrument: "Gold"
+      leverage: "20X"
     expected:
       leverage_pro_entry_visible: true
       leverage_pro_text: "Unlock up to 200X leverage"
 
   - case_id: "au_pro_leverage_entry_opens_assessment"
+    scenario: "leverage_entry_opens_assessment"
     title: "点击AU PRO杠杆入口跳转适当性评估页"
-    account_type: "au_not_pro_not_assessed"
+    account_type: "au_kyc_completed"
     account_preconditions:
       region: "AU"
       kyc_status: "completed"
@@ -63,6 +67,7 @@ cases:
       timeout: 15
     trade:
       instrument: "Gold"
+      leverage: "20X"
     expected:
       appropriateness_assessment_visible: true
       leverage_pro_text: "Unlock up to 200X leverage"

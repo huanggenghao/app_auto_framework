@@ -15,13 +15,62 @@ logger = get_logger(__name__)
 
 
 class BasePage:
+    COMMON_PROMO_POPUP_KEYWORDS = (
+        "粉丝专属特惠",
+        "入金最高得",
+        "去参加",
+        "Bonus",
+        "Join",
+        "Participate",
+        "恭喜",
+        "奖励",
+    )
+    COMMON_POPUP_CLOSE_CANDIDATES = (
+        ("id", "x.mitrade.dev:id/ivOperatorClose"),
+        ("id", "x.mitrade.dev:id/ivClose"),
+        ("id", "x.mitrade.dev:id/iv_close"),
+        ("id", "x.mitrade.dev:id/btnClose"),
+        ("id", "x.mitrade.dev:id/ivNegative"),
+        ("id", "x.mitrade.dev:id/btnNegative"),
+        ("xpath", "//*[@text='Close' or @text='关闭' or @text='Cancel' or @text='Not now' or @text='Later']"),
+        (
+            "xpath",
+            "//*[contains(@resource-id, 'ivOperatorClose') "
+            "or contains(@resource-id, 'ivClose') "
+            "or contains(@resource-id, 'iv_close') "
+            "or contains(@resource-id, 'btnClose') "
+            "or contains(@resource-id, 'ivNegative') "
+            "or contains(@resource-id, 'btnNegative')]",
+        ),
+    )
+    COMMON_POPUP_CONTAINER_CANDIDATES = (
+        (
+            "xpath",
+            "//*[contains(@resource-id, 'dialog') "
+            "or contains(@resource-id, 'Dialog') "
+            "or contains(@resource-id, 'popup') "
+            "or contains(@resource-id, 'Popup') "
+            "or contains(@resource-id, 'mask') "
+            "or contains(@resource-id, 'Mask')]",
+        ),
+    )
+
     def __init__(self, driver, timeout=10):
         self.driver = driver
         self.timeout = timeout
 
-    def wait_for_visible(self, locator, timeout=None, capture_on_timeout=True):
+    def wait_for_visible(
+        self,
+        locator,
+        timeout=None,
+        capture_on_timeout=True,
+        log_attempt=True,
+    ):
         wait_time = timeout or self.timeout
-        logger.info("Waiting for element visible: %s", locator)
+        if log_attempt:
+            logger.info("Waiting for element visible: %s", locator)
+        else:
+            logger.debug("Optional element visibility probe: %s", locator)
         try:
             return WebDriverWait(self.driver, wait_time).until(EC.visibility_of_element_located(locator))
         except TimeoutException as exc:
@@ -115,12 +164,118 @@ class BasePage:
         with step(f"Get element text: {locator}"):
             return self.wait_for_visible(locator, timeout).text
 
-    def is_element_visible(self, locator, timeout=3):
+    def is_element_visible(self, locator, timeout=1):
         try:
-            self.wait_for_visible(locator, timeout, capture_on_timeout=False)
+            self.wait_for_visible(
+                locator,
+                timeout,
+                capture_on_timeout=False,
+                log_attempt=False,
+            )
             return True
         except ElementOperationError:
             return False
+
+    def optional_exists(self, locator, timeout=0.5):
+        return self.is_element_visible(locator, timeout=timeout)
+
+    def close_common_popups_if_exists(self, rounds=3, timeout=0.5, name="common_popup"):
+        closed_any = False
+        for _ in range(rounds):
+            popup_reason = self._common_blocking_popup_reason(timeout=timeout)
+            if not popup_reason:
+                return closed_any
+
+            clicked = False
+            for locator in self.COMMON_POPUP_CLOSE_CANDIDATES:
+                if not self.optional_exists(locator, timeout=timeout):
+                    continue
+                logger.info("关闭阻塞型通用弹窗: reason=%s, locator=%s", popup_reason, locator)
+                try:
+                    self._tap_visible_direct(locator, timeout=1)
+                    closed_any = True
+                    clicked = True
+                    break
+                except ElementOperationError as exc:
+                    logger.warning("关闭通用弹窗失败: locator=%s, error=%s", locator, exc)
+
+            if clicked:
+                time.sleep(0.3)
+                continue
+
+            logger.warning(
+                "检测到阻塞型弹窗信号但未找到可点击关闭按钮，不做坐标兜底: %s",
+                self._common_popup_keyword_state(),
+            )
+            self._log_common_popup_diagnostics(name)
+            return closed_any
+        return closed_any
+
+    def _tap_visible_direct(self, locator, timeout=1):
+        element = self.wait_for_visible(locator, timeout=timeout)
+        try:
+            element.click()
+        except WebDriverException:
+            rect = element.rect
+            self.tap_coordinates(
+                rect["x"] + rect["width"] / 2,
+                rect["y"] + rect["height"] / 2,
+            )
+
+    def _common_blocking_popup_reason(self, timeout=0.5):
+        if self._has_visible_common_popup_close(timeout=timeout):
+            return "close_button"
+
+        if self._has_visible_common_popup_container(timeout=timeout):
+            return "popup_container"
+
+        source = self._safe_page_source()
+        if self._has_common_promo_text(source) and self._has_visible_common_popup_close(timeout=timeout):
+            return "promo_with_close_button"
+
+        return None
+
+    def _has_visible_common_popup_close(self, timeout=0.5):
+        return any(
+            self.optional_exists(locator, timeout=timeout)
+            for locator in self.COMMON_POPUP_CLOSE_CANDIDATES
+        )
+
+    def _has_visible_common_popup_container(self, timeout=0.5):
+        return any(
+            self.optional_exists(locator, timeout=timeout)
+            for locator in self.COMMON_POPUP_CONTAINER_CANDIDATES
+        )
+
+    def _has_common_promo_text(self, source):
+        return any(keyword in source for keyword in self.COMMON_PROMO_POPUP_KEYWORDS)
+
+    def _common_popup_keyword_state(self):
+        source = self._safe_page_source()
+        return {
+            keyword: keyword in source
+            for keyword in (
+                "粉丝专属特惠",
+                "入金最高得",
+                "去参加",
+                "Close",
+                "关闭",
+                "ivClose",
+                "btnClose",
+                "ivNegative",
+                "btnNegative",
+            )
+        }
+
+    def _log_common_popup_diagnostics(self, name):
+        logger.warning("%s 弹窗关键词命中: %s", name, self._common_popup_keyword_state())
+
+    def _safe_page_source(self):
+        try:
+            return self.driver.page_source or ""
+        except WebDriverException as exc:
+            logger.debug("Failed to read page source: %s", exc)
+            return ""
 
     @contextmanager
     def preserved_context(self):

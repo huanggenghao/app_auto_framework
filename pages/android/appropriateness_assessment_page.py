@@ -57,7 +57,7 @@ class AndroidAppropriatenessAssessmentPage(BasePage):
             self.tap_relative(0.93, 0.073)
 
     def _confirm_leave_if_needed(self, timeout=5):
-        if self.is_element_visible(self.LEAVE_CONFIRM_TITLE, timeout=2):
+        if self.is_element_visible(self.LEAVE_CONFIRM_TITLE, timeout=min(timeout, 1)):
             self.click(self.LEAVE_BUTTON, timeout=timeout)
 
     def _wait_until_closed(self, timeout=2):

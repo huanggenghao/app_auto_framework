@@ -24,11 +24,13 @@ def load_au_pro_cases():
 @severity(get_severity_level("critical"))
 @pytest.mark.au_pro
 @pytest.mark.parametrize("case_data", load_au_pro_cases(), ids=lambda case: case["case_id"])
-def test_au_pro_card(driver, platform, case_data):
+def test_au_pro_card(driver, platform, ensure_au_pro_logged_in, case_data):
     if platform != "android":
         pytest.skip("AU PRO test is currently implemented for Android only")
+
+    ensure_au_pro_logged_in(case_data)
 
     au_pro_flow = AuProFlow(driver, platform)
 
     dynamic_title(case_data["title"])
-    au_pro_flow.assert_au_pro_case(case_data)
+    au_pro_flow.assert_au_pro_case(case_data, ensure_login=False)

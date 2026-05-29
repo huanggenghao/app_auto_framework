@@ -1,8 +1,12 @@
 from selenium.common.exceptions import WebDriverException
 
 from common.allure_util import step
+from common.logger import get_logger
 from core.base_page import BasePage
 from core.exceptions import ElementOperationError
+
+
+logger = get_logger(__name__)
 
 
 class AndroidLoginPage(BasePage):
@@ -11,18 +15,13 @@ class AndroidLoginPage(BasePage):
     LOGIN_TITLE = ("id", "x.mitrade.dev:id/tvLoginTitle")
     ONBOARDING_LOGIN_TEXT = ("id", "x.mitrade.dev:id/tvLoginAccount")
 
-    PHONE_TAB = (
-        "xpath",
-        "//*[@resource-id='x.mitrade.dev:id/llTabRoot' and .//*[@text='手机号码']]",
-    )
-    EMAIL_TAB = (
-        "xpath",
-        "//*[@resource-id='x.mitrade.dev:id/llTabRoot' and .//*[@text='邮箱']]",
-    )
+    PHONE_TAB = ("xpath", "//*[@text='手机号码' or @text='Phone' or @text='Mobile']")
+    EMAIL_TAB = ("xpath", "//*[@text='邮箱' or @text='Email']")
 
     PHONE_INPUT = ("id", "x.mitrade.dev:id/etPhone")
     PHONE_COUNTRY_SELECTOR = ("id", "x.mitrade.dev:id/csSelectRegisterCountry")
     PHONE_COUNTRY_TEXT = ("id", "x.mitrade.dev:id/tvCountryText")
+    PHONE_COUNTRY_ARROW = ("id", "x.mitrade.dev:id/ivArrow")
     COUNTRY_PICKER_SEARCH = ("id", "x.mitrade.dev:id/et_search")
     COUNTRY_PICKER_CLOSE = ("id", "x.mitrade.dev:id/ivCloseDialog")
     EMAIL_INPUT_CANDIDATES = (
@@ -57,17 +56,39 @@ class AndroidLoginPage(BasePage):
     )
     BONUS_POPUP_TITLE = ("xpath", "//*[@text='恭喜您获得']")
     BONUS_POPUP_CONFIRM = ("id", "x.mitrade.dev:id/btnNegative")
+    SYSTEM_PERMISSION_DENY_BUTTONS = (
+        ("xpath", "//android.widget.Button[@text='Don\u2019t allow']"),
+        ("xpath", "//android.widget.Button[@text=\"Don't allow\"]"),
+        ("xpath", "//android.widget.Button[@text='Deny']"),
+        ("xpath", "//android.widget.Button[@text='拒绝']"),
+    )
 
     HOME_LOGO = ("id", "x.mitrade.dev:id/ivHomeLogo")
     HOME_TAB = ("id", "x.mitrade.dev:id/rbTabHome")
 
-    def enter_login_page(self):
+    def prepare_for_login(self, login_type, account_type=None):
+        self.dismiss_system_permission_dialog_if_visible(timeout=0.5)
+        self.close_bonus_popup_if_visible(timeout=2)
+        self.close_country_picker_if_visible(timeout=2)
+        self.enter_login_page(login_type=login_type, account_type=account_type)
+
+    def enter_login_page(self, login_type=None, account_type=None):
         with step("Enter Mitrade login page"):
             if self.is_on_login_page():
+                self._log_login_page_state("已在登录页", login_type, account_type)
                 return
 
-            self._tap_onboarding_login_text()
-            self.wait_for_visible(self.LOGIN_TITLE, timeout=10)
+            self._log_login_page_state("进入登录页", login_type, account_type)
+            try:
+                self._tap_onboarding_login_text()
+                self.wait_for_visible(self.LOGIN_TITLE, timeout=10)
+            except ElementOperationError as exc:
+                diagnostics = self.capture_diagnostics("enter_login_page_failed")
+                raise ElementOperationError(
+                    "Failed to enter login page. "
+                    f"current_page={self.current_page_name()}, "
+                    f"login_type={login_type}, account_type={account_type}. {diagnostics}"
+                ) from exc
 
     def is_on_login_page(self, timeout=3):
         return self.is_element_visible(self.LOGIN_TITLE, timeout=timeout)
@@ -108,17 +129,16 @@ class AndroidLoginPage(BasePage):
             return
 
         expected_code = self._normalize_country_code(country_code)
-        if self.is_element_visible(self.PHONE_COUNTRY_TEXT, timeout=2):
+        if self.is_element_visible(self.PHONE_COUNTRY_TEXT, timeout=1):
             current_code = self.get_text(self.PHONE_COUNTRY_TEXT, timeout=2)
             if current_code == expected_code:
                 return
 
         with step(f"Select phone country: {country_name or expected_code} {expected_code}"):
-            self.click(self.PHONE_COUNTRY_SELECTOR, timeout=timeout)
-            self.wait_for_visible(self.COUNTRY_PICKER_SEARCH, timeout=timeout)
+            self.open_phone_country_picker(timeout=timeout)
             self.input_text(
                 self.COUNTRY_PICKER_SEARCH,
-                country_name or expected_code,
+                self._country_search_text(expected_code),
                 timeout=timeout,
             )
             self.hide_keyboard_if_open()
@@ -129,12 +149,42 @@ class AndroidLoginPage(BasePage):
                 message=f"Phone country should be selected: {expected_code}",
             )
 
-    def select_login_type(self, login_type, timeout=5):
+    def open_phone_country_picker(self, timeout=5):
+        locators = (
+            self.PHONE_COUNTRY_SELECTOR,
+            self.PHONE_COUNTRY_TEXT,
+            self.PHONE_COUNTRY_ARROW,
+        )
+        last_error = None
+        for locator in locators:
+            try:
+                self.click(locator, timeout=timeout)
+                if self.is_country_picker_visible(timeout=1):
+                    self.wait_for_visible(self.COUNTRY_PICKER_SEARCH, timeout=timeout)
+                    return
+            except ElementOperationError as exc:
+                last_error = exc
+
+        raise ElementOperationError(
+            f"Country picker did not open from country selector elements. Last error={last_error}"
+        )
+
+    def select_login_type(self, login_type, timeout=5, account_type=None):
         if login_type == "phone":
-            self.click(self.PHONE_TAB, timeout=timeout)
+            self._tap_login_type_tab(
+                login_type,
+                self.PHONE_TAB,
+                timeout=timeout,
+                account_type=account_type,
+            )
             return
         if login_type == "email":
-            self.click(self.EMAIL_TAB, timeout=timeout)
+            self._tap_login_type_tab(
+                login_type,
+                self.EMAIL_TAB,
+                timeout=timeout,
+                account_type=account_type,
+            )
             return
         raise ValueError(f"Unsupported login_type: {login_type}")
 
@@ -224,6 +274,15 @@ class AndroidLoginPage(BasePage):
             )
         return True
 
+    def dismiss_system_permission_dialog_if_visible(self, timeout=1):
+        for locator in self.SYSTEM_PERMISSION_DENY_BUTTONS:
+            if not self.is_element_visible(locator, timeout=timeout):
+                continue
+            logger.info("关闭系统权限弹窗: %s", locator)
+            self.click(locator, timeout=3)
+            return True
+        return False
+
     def get_error_message(self):
         return self.get_text(self.ERROR_MESSAGE, timeout=5)
 
@@ -257,13 +316,95 @@ class AndroidLoginPage(BasePage):
         except WebDriverException:
             element.click()
 
+    def _tap_login_type_tab(self, login_type, locator, timeout=5, account_type=None):
+        with step(f"Select login type tab: {login_type}"):
+            logger.info(
+                "点击%s tab: current_page=%s, login_type=%s, account_type=%s",
+                self._login_type_label(login_type),
+                self.current_page_name(),
+                login_type,
+                account_type,
+            )
+            try:
+                self._tap_visible_or_parent(locator, timeout=timeout)
+                return
+            except ElementOperationError as exc:
+                diagnostics = self.capture_diagnostics(f"{login_type}_login_tab_not_found")
+                raise ElementOperationError(
+                    "Failed to select login tab. "
+                    f"current_page={self.current_page_name()}, "
+                    f"login_type={login_type}, account_type={account_type}, "
+                    f"locator={locator}. {diagnostics}"
+                ) from exc
+
+    def _tap_visible_or_parent(self, locator, timeout=5):
+        element = self.wait_for_visible(locator, timeout=timeout)
+        try:
+            element.click()
+            return
+        except WebDriverException:
+            logger.debug("Visible element click failed, fallback to coordinate tap: %s", locator)
+
+        try:
+            rect = element.rect
+            self.tap_coordinates(
+                rect["x"] + rect["width"] / 2,
+                rect["y"] + rect["height"] / 2,
+            )
+            return
+        except WebDriverException:
+            logger.debug("Coordinate tap failed, fallback to parent click: %s", locator)
+
+        parent_locator = (locator[0], f"({locator[1]})/..")
+        parent = self.wait_for_visible(parent_locator, timeout=1)
+        try:
+            parent.click()
+        except WebDriverException as exc:
+            diagnostics = self.capture_diagnostics("tap_login_tab_parent_failed")
+            raise ElementOperationError(
+                f"Visible login tab cannot be clicked: {locator}. {diagnostics}"
+            ) from exc
+
+    def current_page_name(self):
+        try:
+            source = self.driver.page_source or ""
+        except WebDriverException:
+            return "Unknown"
+        if "x.mitrade.dev:id/tvLoginTitle" in source:
+            return "Login"
+        if "x.mitrade.dev:id/tvLoginAccount" in source:
+            return "Onboarding"
+        if "x.mitrade.dev:id/et_search" in source or "选择国家/地区" in source:
+            return "CountryPicker"
+        if "x.mitrade.dev:id/btnNegative" in source or "恭喜您获得" in source:
+            return "BonusPopup"
+        if "x.mitrade.dev:id/ivHomeLogo" in source or "x.mitrade.dev:id/rbTabHome" in source:
+            return "Home"
+        if "x.mitrade.dev:id/tvMarket" in source or "x.mitrade.dev:id/rbTabTrade" in source:
+            return "Trade"
+        return "Unknown"
+
+    def _log_login_page_state(self, action, login_type=None, account_type=None):
+        logger.info(
+            "%s: current_page=%s, login_type=%s, account_type=%s",
+            action,
+            self.current_page_name(),
+            login_type,
+            account_type,
+        )
+
+    @staticmethod
+    def _login_type_label(login_type):
+        return "手机号" if login_type == "phone" else "邮箱"
+
     def _resolve_email_input(self, timeout=5):
         for locator in self.EMAIL_INPUT_CANDIDATES:
             try:
                 self.wait_for_visible(
                     locator,
-                    timeout=min(timeout, 2),
+                    timeout=min(timeout, 1),
                     capture_on_timeout=False,
+                    log_attempt=False,
                 )
                 return locator
             except ElementOperationError:
@@ -283,8 +424,9 @@ class AndroidLoginPage(BasePage):
         try:
             switch_button = self.wait_for_visible(
                 self.SWITCH_LOGIN_METHOD,
-                timeout=3,
+                timeout=1,
                 capture_on_timeout=False,
+                log_attempt=False,
             )
         except ElementOperationError:
             return
@@ -329,3 +471,7 @@ class AndroidLoginPage(BasePage):
         if country_code.startswith("+"):
             return country_code
         return f"+{country_code}"
+
+    @staticmethod
+    def _country_search_text(country_code):
+        return str(country_code).strip().lstrip("+")

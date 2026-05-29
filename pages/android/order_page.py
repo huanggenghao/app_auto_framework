@@ -31,6 +31,17 @@ class AndroidOrderPage(BasePage):
             self.wait_for_loaded(timeout=timeout)
             self.click(self.CURRENT_LEVERAGE, timeout=timeout)
 
+    def select_leverage(self, leverage_text, timeout=5):
+        with step(f"Select leverage: {leverage_text}"):
+            self.wait_for_leverage_selector(timeout=timeout)
+            self.click(self._exact_text_locator(leverage_text), timeout=timeout)
+            self.wait_until(
+                lambda: not self.is_leverage_selector_visible(timeout=1),
+                timeout=timeout,
+                message=f"Leverage selector should close after selecting {leverage_text}",
+            )
+            self.wait_for_loaded(timeout=timeout)
+
     def wait_for_leverage_selector(self, timeout=10):
         self.wait_for_visible(self.LEVERAGE_SELECTOR_TITLE, timeout=timeout)
         self.wait_for_visible(self.LEVERAGE_LIST, timeout=timeout)
@@ -69,6 +80,10 @@ class AndroidOrderPage(BasePage):
     @classmethod
     def _text_locator(cls, text):
         return ("xpath", f"//*[contains(@text, {cls._xpath_literal(text)})]")
+
+    @classmethod
+    def _exact_text_locator(cls, text):
+        return ("xpath", f"//*[@text={cls._xpath_literal(text)}]")
 
     @staticmethod
     def _xpath_literal(value):

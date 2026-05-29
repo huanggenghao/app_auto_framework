@@ -33,6 +33,16 @@ def driver(request, platform):
 
     logger.info("Creating Appium driver for platform: %s", platform)
     appium_driver = DriverFactory.create_driver(platform)
+    if platform == "android":
+        try:
+            from pages.android.login_page import AndroidLoginPage
+
+            AndroidLoginPage(appium_driver).close_common_popups_if_exists(
+                rounds=2,
+                name="driver_startup_popup",
+            )
+        except Exception as exc:
+            logger.warning("Failed to close startup popup after driver creation: %s", exc)
 
     yield appium_driver
 
@@ -64,6 +74,38 @@ def app_state(driver, platform):
 @pytest.fixture
 def ensure_logged_out(app_state):
     app_state.ensure_logged_out()
+
+
+@pytest.fixture
+def ensure_logged_in(app_state):
+    from common.account_util import resolve_account_from_case
+
+    def _ensure_logged_in(case_data, force_relogin=False):
+        if force_relogin:
+            logger.info(
+                "根据 account_type 从 data/accounts.yaml 读取账号: %s",
+                case_data.get("account_type") or case_data.get("account_key"),
+            )
+        account_data = (
+            resolve_account_from_case(case_data)
+            if force_relogin
+            else case_data.get("account") or resolve_account_from_case(case_data)
+        )
+        app_state.ensure_logged_in(
+            account_data,
+            case_data,
+            force_relogin=force_relogin,
+        )
+
+    return _ensure_logged_in
+
+
+@pytest.fixture
+def ensure_au_pro_logged_in(ensure_logged_in):
+    def _ensure_au_pro_logged_in(case_data):
+        ensure_logged_in(case_data, force_relogin=True)
+
+    return _ensure_au_pro_logged_in
 
 
 @pytest.hookimpl(hookwrapper=True)
